@@ -1,0 +1,112 @@
+create table customer_data(cust_id number,customer_email varchar2(100),net_revenue number,year number);
+
+select * from customer_data;
+
+update customer_data set customer_email=trim(customer_email);
+commit;
+
+-- Total revenue for the current year
+select sum(net_revenue) as Total_Revenue 
+from customer_data
+where year=2017;
+
+--• New Customer Revenue
+
+select year, sum(net_revenue)
+from customer_data c1
+where not exists (select 1 from customer_data c2 
+                           where c2.customer_email=c1.customer_email
+                           and c2.year<c1.year
+                  )
+ group by year;
+
+--• Existing Customer Growth
+
+select curr_year,sum(curr_revenue-prev_revenue) as exist_cust_grth
+from(
+select c.customer_email,c.year as curr_year,c.net_revenue as curr_revenue,
+       lag(year)over(partition by customer_email order by year) as prev_year,
+       lag(net_revenue)over(partition by customer_email order by year) as prev_revenue,
+       c.year-lag(c.year)over(partition by customer_email order by year) as year_diff
+from customer_data c
+)
+where year_diff=1
+group by curr_year;
+
+--• • Revenue lost from attrition
+
+with t1 as(
+select year,
+       sum(net_revenue) as Lost_Rrevenue
+from customer_data c1
+where not exists(select 1 from customer_data c2
+                          where c2.customer_email=c1.customer_email
+                          and c2.year>c1.year
+                )
+group by year)
+select lead(year)over(order by year) as year,
+       Lost_Rrevenue
+from t1;
+
+--• Existing Customer Revenue Current Year
+
+select year,sum(net_revenue)
+from customer_data a
+where exists(select 1 from customer_data b
+                      where b.customer_email=a.customer_email
+                      and b.year<a.year
+            )
+group by year;
+
+--• • Existing Customer Revenue Prior Year
+
+select year,sum(net_revenue)
+from customer_data a
+where exists(select 1 from customer_data b
+                      where b.customer_email=a.customer_email
+                      and b.year>a.year
+            )
+group by year;
+
+-- • Total Customers Current Year
+
+select year,count(distinct customer_email) as tot_customers
+from customer_data
+group by year;
+
+
+--• Total Customers Previous Year
+
+with t1 as (
+select year,count(distinct customer_email) as tot_customers
+from customer_data
+group by year)
+select t1.year,
+       lag(tot_customers) over(order by year)prev_year_tot_cus
+from t1  ;
+
+--• New Customers
+
+select year,count(distinct customer_email) as new_customers
+from customer_data c1
+where not exists(select 1 from customer_data c2
+                          where c2.customer_email=c1.customer_email
+                          and c2.year<c1.year
+                )
+group by year;
+
+
+--• Lost Customers
+
+with t1 as(
+select year,
+       count(distinct customer_email) as lost_customers
+from customer_data c1
+where not exists(select 1 from customer_data c2
+                          where c2.customer_email=c1.customer_email
+                          and c2.year>c1.year
+                )
+group by year)
+select lead(year)over(order by year) as year,
+       lost_customers
+from t1;
